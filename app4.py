@@ -9,10 +9,7 @@ import streamlit as st
 import numpy as np
 import pandas as pd
 import plotly.express as px
-import os
-from pathlib import Path
-
-
+import io
 
 # Estilo de fondo
 page_bg_img = """
@@ -25,41 +22,39 @@ radial-gradient(rgba(255,255,255,.1) 15%, transparent 20%) 0 1px,
 radial-gradient(rgba(255,255,255,.1) 15%, transparent 20%) 8px 9px;
 background-color:#282828;
 background-size:16px 16px;
+}
 </style>
 """
-
 st.markdown(page_bg_img, unsafe_allow_html=True)
 
-
+# Función de simulación
 def simulate_pension(ahorro_inicial, aportacion_mensual, rendimiento_anual, inflacion_anual, años, estrategia, crisis):
     saldo = ahorro_inicial
     data = []
     total_aportado = ahorro_inicial + (aportacion_mensual * 12 * años)
+    
     for año in range(1, años + 1):
         if estrategia == "Renta fija":
-            rendimiento_real = rendimiento_anual - 1  # Menor rendimiento, menor riesgo
+            rendimiento_real = rendimiento_anual - 1
         elif estrategia == "Renta variable":
-            rendimiento_real = rendimiento_anual + 2  # Mayor rendimiento, mayor riesgo
+            rendimiento_real = rendimiento_anual + 2
         else:
-            rendimiento_real = rendimiento_anual  # Mixta mantiene el rendimiento base
+            rendimiento_real = rendimiento_anual 
         
-        # Aplicar crisis económica cada 10 años (simulación de crisis)
         if crisis and año % 10 == 0:
-            rendimiento_real -= 5  # Reducción del rendimiento temporal
+            rendimiento_real -= 5  
         
         saldo = saldo * (1 + (rendimiento_real - inflacion_anual) / 100) + (aportacion_mensual * 12)
         data.append([año, saldo])
     
     retorno_total = saldo - total_aportado
-    return pd.DataFrame(data, columns=["Año", "Saldo Acumulado"]), retorno_total, saldo / (20 * 12)  # Pensión mensual durante 20 años
-
-# Obtener la carpeta de descargas
-DOWNLOADS_FOLDER = str(Path.home() / "Downloads")
+    pension_mensual = saldo / (20 * 12)  
+    return pd.DataFrame(data, columns=["Año", "Saldo Acumulado"]), retorno_total, pension_mensual
 
 # Configuración de la aplicación
 st.title("Simulador de Pensiones y Estrategias de Inversión")
 
-# Agregar sección de ayuda en el sidebar
+# Sección de ayuda en el sidebar
 st.sidebar.title("Ayuda")
 st.sidebar.write("Esta aplicación permite simular el crecimiento de un fondo de pensión con diferentes estrategias de inversión.")
 st.sidebar.write("Ingrese los valores de ahorro inicial, aportación mensual, rendimiento e inflación esperados para obtener una proyección a lo largo del tiempo.")
@@ -74,7 +69,9 @@ estrategia = st.selectbox("Estrategia de inversión:", ["Renta fija", "Renta var
 crisis = st.checkbox("Incluir crisis económicas cada 10 años")
 
 # Simulación y visualización
-df, retorno_total, pension_mensual = simulate_pension(ahorro_inicial, aportacion_mensual, rendimiento_anual, inflacion_anual, años, estrategia, crisis)
+df, retorno_total, pension_mensual = simulate_pension(
+    ahorro_inicial, aportacion_mensual, rendimiento_anual, inflacion_anual, años, estrategia, crisis
+)
 fig = px.line(df, x="Año", y="Saldo Acumulado", title=f"Proyección de Pensión - {estrategia}", markers=True)
 st.plotly_chart(fig)
 
@@ -93,14 +90,34 @@ for strat in ["Renta fija", "Renta variable", "Mixta"]:
     df_temp, _, _ = simulate_pension(ahorro_inicial, aportacion_mensual, rendimiento_anual, inflacion_anual, años, strat, crisis)
     df_temp["Estrategia"] = strat
     df_comparacion = pd.concat([df_comparacion, df_temp])
+
 fig_comp = px.line(df_comparacion, x="Año", y="Saldo Acumulado", color="Estrategia", title="Comparación de Estrategias de Inversión")
 st.plotly_chart(fig_comp)
 
-# Exportar datos
-df.to_csv(os.path.join(DOWNLOADS_FOLDER, "simulacion_pension.csv"), index=False)
-df.to_excel(os.path.join(DOWNLOADS_FOLDER, "simulacion_pension.xlsx"), index=False)
-st.write("Los datos de la simulación se han guardado en la carpeta de Descargas como CSV y Excel.")
+# Exportar datos en memoria para descarga
+csv_buffer = io.StringIO()
+df.to_csv(csv_buffer, index=False)
+csv_data = csv_buffer.getvalue()
 
-# Agregar información de autor y copyright
+excel_buffer = io.BytesIO()
+df.to_excel(excel_buffer, index=False, engine="xlsxwriter")
+excel_data = excel_buffer.getvalue()
+
+# Agregar botones de descarga
+st.download_button(
+    label="📥 Descargar CSV",
+    data=csv_data,
+    file_name="simulacion_pension.csv",
+    mime="text/csv"
+)
+
+st.download_button(
+    label="📥 Descargar Excel",
+    data=excel_data,
+    file_name="simulacion_pension.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+)
+
+# Información del desarrollador
 st.sidebar.write("**Desarrollado por: Javier Horacio Pérez Ricárdez**")
 st.sidebar.write("© 2025 Todos los derechos reservados.")
